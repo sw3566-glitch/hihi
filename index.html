@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>그램값</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@320;330;340;400;480;540;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="statusbar"></div>
+
+  <div class="topbar">
+    <span class="eyebrow">그램값</span>
+    <button class="link-mono" id="btnHistory">이력 보기</button>
+  </div>
+
+  <div class="screen active" id="screen-capture">
+    <div class="display">가격표를<br>촬영하세요</div>
+    <p class="subhead">2~4장 찍으면 AI가 상품명·가격·용량·행사문구를 읽고<br>코드가 100ml/100g 기준 실단가를 계산해요</p>
+
+    <div class="capture-area">
+      <div class="capture-icon">📷</div>
+      <p class="capture-hint">상품명 검색 없이<br>촬영만으로 시작</p>
+      <button class="btn-secondary" type="button" id="btnCapture" style="margin-top:0;">촬영하기</button>
+      <button class="btn-secondary" type="button" id="btnGallery">갤러리에서 가져오기</button>
+      <input type="file" id="fileInput" accept="image/*" multiple capture="environment" style="display:none;">
+      <input type="file" id="galleryInput" accept="image/*" multiple style="display:none;">
+    </div>
+
+    <div class="thumbs" id="thumbs"></div>
+
+    <button class="btn-primary" id="btnCompare" disabled>비교하기</button>
+    <p class="footer-caption" id="captureCount">사진 0장 · 최소 2장 필요</p>
+  </div>
+
+  <div class="screen" id="screen-loading">
+    <div class="loading-wrap">
+      <div class="spinner"></div>
+      <div class="loading-label" id="loadingLabel">가격표 인식 중</div>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-results">
+    <div class="display" style="font-size:26px;">비교 결과</div>
+    <p class="subhead" style="margin-bottom:14px;">100ml/100g/개당 가격 기준 · 행사 반영</p>
+    <div class="banner-error" id="errorBanner">자동 인식에 실패했어요. 아래에서 상품명·가격·용량을 직접 입력해주세요.</div>
+    <div id="resultList"></div>
+    <button class="btn-secondary" id="btnRestart">다시 촬영하기</button>
+  </div>
+
+  <div class="screen" id="screen-history">
+    <div class="display" style="font-size:26px;">비교 이력</div>
+    <p class="subhead" style="margin-bottom:14px;">이 기기에 저장된 지난 비교 결과예요</p>
+    <div id="historyList"></div>
+    <button class="btn-secondary" id="btnHistoryBack">돌아가기</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

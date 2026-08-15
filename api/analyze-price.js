@@ -5,10 +5,15 @@
 //
 // 보안: ANTHROPIC_API_KEY는 Vercel 프로젝트의 서버 환경변수에만 존재하며
 // 브라우저나 응답 본문에 절대 포함되지 않는다. (같은 배포/도메인에서 실행되므로 CORS 설정도 불필요)
+//
+// 주의: Vercel Node.js 서버리스 함수는 요청 본문 전체가 약 4.5MB로 제한된다.
+// 이미지 4장을 base64로 보내면 금방 넘기 때문에, 프론트엔드(src/main.js)에서
+// 전송 전 캔버스로 리사이즈/재압축을 거친다. 이 파일의 크기 상한은 그 이후의 2차 방어선이다.
 
 const MAX_IMAGES = 4;
-// base64 문자열 기준 대략적인 상한 (원본 이미지 약 6MB 상당). 과도한 비용/남용 방지용.
-const MAX_IMAGE_BASE64_LEN = 8_000_000;
+// base64 문자열 기준 상한 (이미지 1장당 약 2.2MB 상당). 프론트엔드 압축이 정상 동작하면
+// 보통 이보다 훨씬 작게 들어오며, 이 값은 남용 방지를 위한 안전장치다.
+const MAX_IMAGE_BASE64_LEN = 3_000_000;
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 const EXTRACT_TOOL = {
@@ -28,7 +33,7 @@ const EXTRACT_TOOL = {
               enum: ['liquid', 'weight', 'count', 'length', 'sheet', 'unknown'],
               description:
                 '이 상품의 실제 비교 기준이 되는 품목 카테고리. ' +
-                'liquid=액체(우유/음료/세제/샴푸, 100ml 기준), ' +
+                'liquid=액체(우유/음료/세제/샴푸/화장품, 100ml 기준), ' +
                 'weight=중량(쌀/과자/가루세제, 100g 기준), ' +
                 'count=개수(계란/라면/즉석밥처럼 낱개 수량이 기준, 1개 기준), ' +
                 'length=길이(두루마리 휴지/랩/호일처럼 롤·길이가 기준, 1m 기준), ' +
@@ -40,7 +45,8 @@ const EXTRACT_TOOL = {
               description:
                 '카테고리별 낱개(포장 1개) 기준 수치. liquid/weight: 낱개 용량(예: 500ml면 500, 2L면 2). ' +
                 'length: 롤 1개의 길이(예: 30m면 30). sheet: 팩 1개의 매수(예: 80매면 80). ' +
-                'count: 의미 없으므로 1을 넣는다.',
+                'count: 의미 없으므로 1을 넣는다. 묶음 구성이 서로 다른 용량을 섞어 파는 경우 ' +
+                '(예: 50ml 2개 + 20ml 1개) 가장 흔하거나 큰 대표 용량으로 최선 추정한다.',
             },
             amountUnit: {
               type: 'string',
@@ -52,18 +58,22 @@ const EXTRACT_TOOL = {
               type: 'number',
               description:
                 '이 가격에 포함된 원래 판매 단위의 구성 개수(묶음). 예: "500ml 3개"면 3, 휴지 "30m 30롤"이면 30, ' +
-                '계란 한 판(30개)이면 30, 낱개/단일 포장이면 1. "2+1" 같은 구매 행사 문구와 혼동하지 말 것 ' +
+                '계란 한 판(30개)이면 30, 낱개/단일 포장이면 1. amount가 대표 용량으로 추정된 경우 ' +
+                '그 대표 용량 기준 개수로 최선 추정한다. "2+1" 같은 구매 행사 문구와 혼동하지 말 것 ' +
                 '(그건 promo 필드에 별도로 적는다).',
             },
             priceRegular: {
               type: 'number',
               description:
-                '정상가/일반가(원). 가격표에 가격이 하나만 있으면 그 값을 넣는다. 여러 개가 묶여 하나의 가격표로 팔리면 그 총액.',
+                '일반 구매자가 실제로 결제하는 금액(원). "정상가/판매가/즉시할인가/쿠폰 적용가/최종 결제가"처럼 ' +
+                '별도 멤버십 가입 없이 누구나 받을 수 있는 가격을 여기에 넣는다. 가격이 하나만 있으면 그 값. ' +
+                '여러 판매처가 나열된 가격비교 페이지라면 대표로 보이는 가격 하나만 사용한다.',
             },
             priceMember: {
               type: ['number', 'null'],
               description:
-                '멤버십/회원 전용 할인가(원)가 정상가와 별도로 표시되어 있으면 그 값. 없으면 null.',
+                '"멤버십가/회원 전용가/N+ 멤버십 적용가"처럼 별도 유료·무료 멤버십 가입이 있어야만 받을 수 있는 ' +
+                '할인가가 정상가와 별도로 표시되어 있으면 그 값. 단순 쿠폰/즉시할인은 여기 넣지 말고 priceRegular에 반영. 없으면 null.',
             },
             promo: {
               type: ['string', 'null'],
@@ -118,9 +128,11 @@ export default async function handler(req, res) {
 
   const promptText =
     '아래는 마트/쇼핑몰 가격표 또는 상품 정보 사진 ' + images.length + '장이야. ' +
+    '사진에는 실물 가격표뿐 아니라 온라인 쇼핑몰 상품 상세페이지나 가격비교 페이지 스크린샷도 포함될 수 있어. ' +
     '각 사진에서 상품명, 품목 카테고리(liquid/weight/count/length/sheet/unknown), ' +
     '낱개 기준 수치(amount)와 단위(amountUnit), 구성 개수(packQty), ' +
-    '정상가(priceRegular)와 회원가(priceMember, 있는 경우만), 행사 문구(promo)와 회원 전용 여부(memberOnlyPromo)를 읽어서 ' +
+    '정상가(priceRegular)와 회원가(priceMember, 멤버십 전용 할인가가 별도 표시된 경우만), ' +
+    '행사 문구(promo)와 회원 전용 여부(memberOnlyPromo)를 읽어서 ' +
     'return_items 도구를 호출해 결과를 반환해줘. 사진이 주어진 순서대로 items 배열을 채워줘. ' +
     '카테고리 판단이 애매하면 unknown으로 표시해. ' +
     '값을 확신할 수 없으면 최선의 추정치를 채우되, 절대 도구 호출 없이 텍스트로만 답하지 마.';

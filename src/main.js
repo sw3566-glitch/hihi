@@ -1,12 +1,15 @@
 const HISTORY_KEY = 'geuramgap:history';
-const MEMBER_KEY = 'geuramgap:isMember';
-const MEMBER_ASKED_KEY = 'geuramgap:memberAsked';
 const MAX_HISTORY = 50;
+
+// 전송 전 이미지를 이 정도로 줄여서 보낸다.
+// (Vercel 서버리스 함수는 요청 본문이 약 4.5MB로 제한되어, 스크린샷처럼 큰 원본을 그대로 보내면
+//  서버에 도달하기도 전에 요청 자체가 실패한다. 그래서 브라우저에서 미리 리사이즈/재압축한다.)
+const COMPRESS_MAX_DIMENSION = 1280;
+const COMPRESS_QUALITY = 0.82;
 
 let captured = [];
 let items = [];
 let seq = 0;
-let isMember = localStorage.getItem(MEMBER_KEY) === 'yes';
 
 const thumbs = document.getElementById('thumbs');
 const fileInput = document.getElementById('fileInput');
@@ -55,31 +58,48 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 
-function fileToBase64(file) {
+// 이미지를 캔버스로 리사이즈 + JPEG 재압축해서 base64로 돌려준다.
+// 스마트폰 카메라 원본이나 브라우저 풀페이지 스크린샷처럼 큰 파일도 안전한 크기로 줄여준다.
+function compressImageToBase64(file, maxDim = COMPRESS_MAX_DIMENSION, quality = COMPRESS_QUALITY) {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result.split(',')[1]);
-    r.onerror = () => reject(new Error('read failed'));
-    r.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width >= height) {
+          height = Math.round(height * (maxDim / width));
+          width = maxDim;
+        } else {
+          width = Math.round(width * (maxDim / height));
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objectUrl);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('compress failed')); return; }
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('image load failed')); };
+    img.src = objectUrl;
   });
-}
-
-// 첫 실행 시 한 번만 "회원이신가요?"를 물어보고 localStorage에 저장한다.
-// 이후에는 결과 화면 상단의 기준 전환 칩으로 언제든 바꿀 수 있다.
-function ensureMembershipAsked() {
-  if (localStorage.getItem(MEMBER_ASKED_KEY) === 'yes') return;
-  const answer = window.confirm('마트/쇼핑몰 멤버십 회원이신가요?\n(회원가가 표시된 가격표라면 회원가 기준으로 비교해드려요. 나중에 결과 화면에서 언제든 바꿀 수 있어요.)');
-  isMember = !!answer;
-  localStorage.setItem(MEMBER_KEY, isMember ? 'yes' : 'no');
-  localStorage.setItem(MEMBER_ASKED_KEY, 'yes');
 }
 
 // 이미지를 같은 배포(Vercel)의 서버리스 함수 /api/analyze-price 로 전달한다.
 // Anthropic API 키는 서버 환경변수에만 존재하며 브라우저로 절대 전달되지 않는다.
 async function extractItemsFromImages(entries) {
   const images = await Promise.all(entries.map(async e => ({
-    mediaType: e.file.type || 'image/jpeg',
-    data: await fileToBase64(e.file)
+    mediaType: 'image/jpeg',
+    data: await compressImageToBase64(e.file)
   })));
 
   let res;
@@ -110,7 +130,6 @@ function fallbackItems(count) {
 }
 
 btnCompare.addEventListener('click', async () => {
-  ensureMembershipAsked();
   showScreen('screen-loading');
   loadingLabel.textContent = '가격표 인식 중';
   errorBanner.style.display = 'none';
@@ -129,6 +148,7 @@ btnCompare.addEventListener('click', async () => {
   loadingLabel.textContent = '단가 계산 중';
   await new Promise(r => setTimeout(r, 300));
 
+  // 항상 일반가(정상가) 기준으로 시작한다. 회원가는 각 카드에서 개별적으로 전환한다.
   items = extracted.map((p, i) => ({
     id: 'item' + i,
     name: (p.name || ('상품 ' + (i + 1))).toString(),
@@ -139,7 +159,10 @@ btnCompare.addEventListener('click', async () => {
     priceRegular: Number(p.priceRegular) || 0,
     priceMember: (p.priceMember !== null && p.priceMember !== undefined && Number(p.priceMember) > 0) ? Number(p.priceMember) : null,
     promoText: p.promo || null,
-    memberOnlyPromo: !!p.memberOnlyPromo
+    memberOnlyPromo: !!p.memberOnlyPromo,
+    useMemberPrice: false,
+    // 촬영한 사진 순서와 items 순서가 같다는 전제로, 결과 카드에서 원본 사진을 보여주기 위해 연결해둔다.
+    photoUrl: captured[i] ? captured[i].url : null
   }));
 
   if (failed) {
@@ -163,7 +186,6 @@ document.getElementById('btnRestart').addEventListener('click', () => {
 });
 
 // 카테고리별 raw amount/amountUnit을 계산용 표준 단위로 환산한다.
-// liquid -> ml, weight -> g, length -> m, sheet -> 매, count -> (amount는 쓰지 않음)
 function canonicalize(category, amount, amountUnit) {
   switch (category) {
     case 'liquid':
@@ -212,11 +234,11 @@ function normalize(item) {
 
   const unitScale = (item.category === 'liquid' || item.category === 'weight') ? 100 : 1;
 
-  const usingMember = isMember && item.priceMember != null;
+  const usingMember = !!item.useMemberPrice && item.priceMember != null;
   const basePrice = usingMember ? item.priceMember : item.priceRegular;
   const priceBasisLabel = usingMember ? '회원가' : '일반가';
 
-  const promoActive = !!item.promoText && (!item.memberOnlyPromo || isMember);
+  const promoActive = !!item.promoText && (!item.memberOnlyPromo || usingMember);
   let promoBuy = 1, promoFree = 0;
   if (promoActive) {
     const m = String(item.promoText).match(/(\d+)\s*\+\s*(\d+)/);
@@ -252,8 +274,8 @@ function calcText(it) {
   }
   if (it.promoActive && it.promoBuy > 0 && it.promoFree > 0) {
     lines.push('× ' + it.promoBuy + '/' + (it.promoBuy + it.promoFree) + ' 행사가 반영 = ' + Math.round(it.afterUnit).toLocaleString() + '원');
-  } else if (it.promoText && it.memberOnlyPromo && !isMember) {
-    lines.push('(회원 전용 행사 "' + it.promoText + '" · 비회원이라 미반영)');
+  } else if (it.promoText && it.memberOnlyPromo && !it.usingMember) {
+    lines.push('(회원 전용 행사 "' + it.promoText + '" · 지금은 일반가라 미반영, 회원가로 전환하면 반영됨)');
   }
   if (it.category === 'length' && it.perRoll != null) {
     lines.push('참고: 1롤당 ' + Math.round(it.perRoll).toLocaleString() + '원');
@@ -295,21 +317,11 @@ function renderResults() {
   const winner = enriched[0];
   const runnerUp = enriched.length > 1 ? enriched[1] : null;
 
-  // 상단 기준 안내 + 회원가/일반가 전환 칩
   const subhead = document.getElementById('resultsSubhead');
   if (subhead) {
-    const note = basisNote(winner.category);
-    subhead.innerHTML =
-      note + ' · 행사 반영 · ' +
-      '<span class="member-toggle" id="memberToggle">' + (isMember ? '회원가' : '일반가') + ' 기준으로 보는 중 (탭하여 전환)</span>';
-    const toggle = document.getElementById('memberToggle');
-    if (toggle) {
-      toggle.addEventListener('click', () => {
-        isMember = !isMember;
-        localStorage.setItem(MEMBER_KEY, isMember ? 'yes' : 'no');
-        renderResults();
-      });
-    }
+    const hasAnyMemberPrice = items.some(i => i.priceMember != null);
+    subhead.textContent = basisNote(winner.category) + ' · 일반가 기준 · 행사 반영' +
+      (hasAnyMemberPrice ? ' · 회원가 있는 상품은 카드에서 전환 가능' : '');
   }
 
   const list = document.getElementById('resultList');
@@ -334,9 +346,18 @@ function renderResults() {
       ? it.totalAmount.toLocaleString() + '개'
       : it.totalAmount.toLocaleString() + it.canonical.unit + (it.packQty > 1 ? ' (' + it.canonical.value.toLocaleString() + it.canonical.unit + ' × ' + it.packQty + '개)' : '');
 
+    const thumbHtml = it.photoUrl
+      ? '<img class="rc-thumb" src="' + it.photoUrl + '" alt="촬영한 사진" data-id="' + it.id + '">'
+      : '';
+
+    const memberToggleHtml = it.priceMember != null
+      ? '<span class="rc-toggle" data-act="member" data-id="' + it.id + '">' + (it.usingMember ? '일반가로 보기' : '회원가로 보기') + '</span>'
+      : '';
+
     card.innerHTML = `
       <div class="rc-top">
-        <div>
+        ${thumbHtml}
+        <div class="rc-top-text">
           <div class="rc-rank">${idx + 1}위 · ${it.priceBasisLabel}</div>
           <div class="rc-name">${escapeHtml(it.name)}</div>
           <div class="rc-vol">${volText} · ${escapeHtml(promoLabel)}</div>
@@ -350,6 +371,7 @@ function renderResults() {
       <div class="rc-actions">
         <span class="rc-toggle" data-act="calc" data-id="${it.id}">계산 과정 보기</span>
         <span class="rc-toggle" data-act="edit" data-id="${it.id}">값 수정하기</span>
+        ${memberToggleHtml}
       </div>
       <pre class="rc-calc" id="calc-${it.id}">${calcText(it)}</pre>
       <div class="edit-row" id="edit-${it.id}">
@@ -415,11 +437,21 @@ function renderResults() {
 
   list.querySelectorAll('.rc-toggle').forEach(t => {
     t.addEventListener('click', () => {
+      if (t.dataset.act === 'member') {
+        const item = items.find(i => i.id === t.dataset.id);
+        if (item) item.useMemberPrice = !item.useMemberPrice;
+        renderResults();
+        return;
+      }
       const targetId = (t.dataset.act === 'calc' ? 'calc-' : 'edit-') + t.dataset.id;
       const el = document.getElementById(targetId);
       const showing = el.style.display === 'block' || el.style.display === 'flex';
       el.style.display = showing ? 'none' : (t.dataset.act === 'calc' ? 'block' : 'flex');
     });
+  });
+
+  list.querySelectorAll('.rc-thumb').forEach(img => {
+    img.addEventListener('click', () => window.open(img.src, '_blank'));
   });
 
   list.querySelectorAll('input[data-field], select[data-field]').forEach(inp => {

@@ -109,6 +109,12 @@ body{
 }
 .result-card.winner{background:var(--block-lime);border:none;color:var(--block-lime-ink);}
 .rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px;}
+.rc-thumb{
+  width:52px;height:52px;border-radius:var(--radius-md);object-fit:cover;
+  flex-shrink:0;border:1px solid var(--hairline);cursor:pointer;background:var(--surface-soft);
+}
+.result-card.winner .rc-thumb{border-color:rgba(36,61,0,0.25);}
+.rc-top-text{flex:1;min-width:0;}
 .rc-rank{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;opacity:0.72;}
 .rc-name{font-size:19px;font-weight:540;letter-spacing:-0.2px;margin:2px 0 0;}
 .rc-vol{font-size:13px;font-weight:330;opacity:0.7;margin-top:1px;}
@@ -150,12 +156,6 @@ body{
 .hist-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a8880;margin-top:2px;}
 .hist-price{font-size:14px;font-weight:540;}
 .empty-state{font-size:13px;color:#8a8880;text-align:center;padding:40px 0;}
-
-.member-toggle{
-  display:inline-block;margin-top:4px;
-  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
-  letter-spacing:0.02em;color:var(--ink);text-decoration:underline;cursor:pointer;
-}
 
 /* 실제 모바일 브라우저에서는 폰 목업 테두리를 제거해 화면 전체를 그대로 사용한다.
    (데스크톱 프리뷰에서만 목업 프레임을 보여줌) */

@@ -142,81 +142,13 @@ body{
 
 .footer-caption{text-align:center;font-size:12px;color:#8a8880;margin-top:6px;}
 
-/* 정상가/회원가 토글 */
-.mode-toggle{display:flex;gap:8px;margin-bottom:14px;}
-.mode-btn{
-  flex:1;background:#fff;border:1px solid var(--hairline);border-radius:var(--radius-pill);
-  font-family:'Inter',sans-serif;font-size:13px;font-weight:480;color:#6b6a63;
-  padding:9px 10px;cursor:pointer;
+.hist-item{
+  border-bottom:1px solid var(--hairline);padding:12px 0;
+  display:flex;justify-content:space-between;align-items:center;
 }
-.mode-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
-
-/* 결과 카드 내 가격 기준 표시 */
-.rc-basis-tag{
-  font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.03em;
-  color:#6b6a63;margin-bottom:4px;
-}
-.result-card.winner .rc-basis-tag{color:rgba(36,61,0,0.75);}
-.rc-alt{margin-top:2px;}
-.rc-alt .num-alt{font-size:14px;font-weight:540;}
-.rc-alt .unit-alt{font-size:10px;font-weight:400;opacity:0.7;margin-left:2px;}
-.rc-note{
-  font-size:12px;color:#6b6a63;background:var(--surface-soft);border-radius:var(--radius-md);
-  padding:8px 10px;margin-top:8px;line-height:1.4;
-}
-.result-card.winner .rc-note{background:rgba(255,255,255,0.35);color:rgba(36,61,0,0.85);}
-
-/* 카테고리를 자동 인식하지 못한 품목 */
-.unknown-card{border-style:dashed;}
-.unknown-note{font-size:13px;color:#6b6a63;margin:4px 0 12px;line-height:1.4;}
-.cat-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
-.cat-pills button{
-  border:1px solid var(--hairline);background:#fff;border-radius:var(--radius-pill);
-  font-family:'Inter',sans-serif;font-size:12.5px;padding:7px 12px;cursor:pointer;color:var(--ink);
-}
-.cat-pills button:hover{background:var(--surface-soft);}
-
-.edit-field-check{flex-basis:100%;}
-.edit-field-check label{
-  display:flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;
-  font-size:12.5px;text-transform:none;letter-spacing:normal;opacity:1;color:var(--ink);
-}
-.edit-field-check input{width:auto;}
-
-/* 회원 여부를 묻는 최초 1회 모달 */
-.modal-overlay{
-  display:none;position:fixed;inset:0;background:rgba(10,10,10,0.45);
-  align-items:center;justify-content:center;padding:20px;z-index:50;
-}
-.modal-box{
-  background:#fff;border-radius:var(--radius-lg);padding:22px 20px;max-width:340px;width:100%;
-  box-shadow:0 20px 50px rgba(0,0,0,0.25);
-}
-.modal-title{font-size:18px;font-weight:540;letter-spacing:-0.2px;margin-bottom:8px;}
-.modal-desc{font-size:13.5px;color:#4a4a45;line-height:1.5;margin:0 0 18px;}
-.modal-actions{display:flex;flex-direction:column;gap:8px;}
-.modal-actions .btn-primary,.modal-actions .btn-secondary{margin-top:0;}
-
-.hist-item{border-bottom:1px solid var(--hairline);padding:12px 0;}
-.hist-row{display:flex;justify-content:space-between;align-items:center;cursor:default;}
-.hist-row[data-idx]{cursor:pointer;}
 .hist-name{font-size:14px;font-weight:480;}
 .hist-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a8880;margin-top:2px;}
 .hist-price{font-size:14px;font-weight:540;}
-.hist-right{display:flex;align-items:center;gap:8px;}
-.hist-caret{font-size:11px;color:#8a8880;transition:transform 0.15s ease;}
-.hist-detail{display:none;margin-top:10px;padding-top:2px;}
-.hist-detail.open{display:block;}
-.hist-detail-row{display:flex;align-items:center;gap:10px;padding:6px 0;}
-.hist-thumb{
-  width:36px;height:36px;border-radius:var(--radius-md);background:var(--surface-soft);
-  border:1px solid var(--hairline);overflow:hidden;flex-shrink:0;
-}
-.hist-thumb img{width:100%;height:100%;object-fit:cover;}
-.hist-detail-mid{flex:1;min-width:0;}
-.hist-detail-rank{font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8880;}
-.hist-detail-name{font-size:13px;font-weight:480;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.hist-detail-price{font-size:12.5px;font-weight:540;flex-shrink:0;}
 .empty-state{font-size:13px;color:#8a8880;text-align:center;padding:40px 0;}
 
 /* 실제 모바일 브라우저에서는 폰 목업 테두리를 제거해 화면 전체를 그대로 사용한다.

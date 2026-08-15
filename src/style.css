@@ -151,6 +151,12 @@ body{
 .hist-price{font-size:14px;font-weight:540;}
 .empty-state{font-size:13px;color:#8a8880;text-align:center;padding:40px 0;}
 
+.member-toggle{
+  display:inline-block;margin-top:4px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
+  letter-spacing:0.02em;color:var(--ink);text-decoration:underline;cursor:pointer;
+}
+
 /* 실제 모바일 브라우저에서는 폰 목업 테두리를 제거해 화면 전체를 그대로 사용한다.
    (데스크톱 프리뷰에서만 목업 프레임을 보여줌) */
 @media (max-width:480px){

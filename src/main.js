@@ -1,3 +1,10 @@
+// GA4 이벤트 전송 (gtag이 없으면 조용히 무시)
+function track(name, params) {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', name, params || {});
+  }
+}
+
 const HISTORY_KEY = 'geuramgap:history';
 const MAX_HISTORY = 50;
 
@@ -131,6 +138,7 @@ function fallbackItems(count) {
 
 btnCompare.addEventListener('click', async () => {
   showScreen('screen-loading');
+  track('compare_start', { photo_count: captured.length });
   loadingLabel.textContent = '가격표 인식 중';
   errorBanner.style.display = 'none';
 
@@ -139,9 +147,11 @@ btnCompare.addEventListener('click', async () => {
   let failReason = 'server';
   try {
     extracted = await extractItemsFromImages(captured);
+    track('recognize_success', { photo_count: captured.length });
   } catch (err) {
     failed = true;
     failReason = err && err.message === 'network' ? 'network' : 'server';
+    track('recognize_fail', { reason: failReason });
     extracted = fallbackItems(captured.length);
   }
 
@@ -437,6 +447,7 @@ function renderResults() {
 
   list.querySelectorAll('.rc-toggle').forEach(t => {
     t.addEventListener('click', () => {
+      track('ui_toggle', { action: t.dataset.act });
       if (t.dataset.act === 'member') {
         const item = items.find(i => i.id === t.dataset.id);
         if (item) item.useMemberPrice = !item.useMemberPrice;
@@ -458,6 +469,7 @@ function renderResults() {
     inp.addEventListener('change', () => {
       const item = items.find(i => i.id === inp.dataset.id);
       const field = inp.dataset.field;
+      track('value_edit', { field: field });
       if (field === 'priceRegular' || field === 'amount' || field === 'packQty') {
         const val = parseFloat(inp.value);
         item[field] = isNaN(val) ? (field === 'packQty' ? 1 : 0) : val;

@@ -51,9 +51,9 @@ const RESPONSE_SCHEMA = {
           },
           amountUnit: {
             type: 'STRING',
-            enum: ['ml', 'l', 'g', 'kg', 'm', 'cm', '매', '개', ''],
+            enum: ['ml', 'l', 'g', 'kg', 'm', 'cm', '매', '개', 'unknown'],
             description:
-              'amount의 단위. liquid는 ml 또는 l, weight는 g 또는 kg, length는 m 또는 cm, sheet는 매, count는 개. unknown이면 빈 문자열.',
+              'amount의 단위. liquid는 ml 또는 l, weight는 g 또는 kg, length는 m 또는 cm, sheet는 매, count는 개. unknown이면 "unknown".',
           },
           packQty: {
             type: 'NUMBER',

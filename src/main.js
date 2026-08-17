@@ -203,7 +203,7 @@ function canonicalize(category, amount, amountUnit) {
     case 'count':
       return { value: 1, unit: '개' };
     default:
-      return { value: amount || 1, unit: amountUnit || '단위' };
+      return { value: amount || 1, unit: (amountUnit && amountUnit !== 'unknown') ? amountUnit : '단위' };
   }
 }
 

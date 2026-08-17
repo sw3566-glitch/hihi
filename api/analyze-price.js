@@ -8,7 +8,10 @@
 //
 // 비용: Google AI Studio에서 발급받는 Gemini API 키는 무료 티어가 있다 (신용카드 등록 불필요).
 // 단, Flash 계열 모델만 무료이고 분당/일일 요청 수 제한이 있다. 모델명은 종종 바뀌므로
-// 필요하면 Vercel 환경변수 GEMINI_MODEL로 다른 모델(예: gemini-2.5-flash-lite)을 지정할 수 있다.
+// 필요하면 Vercel 환경변수 GEMINI_MODEL로 다른 모델(예: gemini-3.5-flash-lite)을 지정할 수 있다.
+// 주의: Google이 구버전 모델(2.0/2.5 Flash 등)을 순차적으로 종료하고 있어, 모델명은 종종 바뀐다.
+// "404 no longer available to new users/models" 에러가 나면 https://ai.google.dev/gemini-api/docs/models
+// 에서 현재 사용 가능한 최신 모델명으로 GEMINI_MODEL을 갱신하면 된다.
 // 최신 무료 티어 모델/한도는 https://ai.google.dev/gemini-api/docs/models 에서 확인.
 //
 // 주의: Vercel Node.js 서버리스 함수는 요청 본문 전체가 약 4.5MB로 제한된다.
@@ -156,7 +159,7 @@ export default async function handler(req, res) {
     '가격이 실제보다 절반 등으로 잘못 계산되니 절대 하지 마라. ' +
     '값을 확신할 수 없으면 최선의 추정치를 채워라.';
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
   try {
     const geminiRes = await fetch(

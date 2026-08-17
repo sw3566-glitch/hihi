@@ -12,17 +12,19 @@ Supabase 없이 **GitHub 저장소 하나 + Vercel 프로젝트 하나**로 끝�
 브라우저(프론트엔드, 정적 파일)
   │  이미지(base64) 전송  (같은 도메인이므로 CORS 설정 불필요)
   ▼
-/api/analyze-price.js   ← Vercel 서버리스 함수. ANTHROPIC_API_KEY는 여기(서버)에만 존재
-  │  Anthropic Vision API 호출
+/api/analyze-price.js   ← Vercel 서버리스 함수. GEMINI_API_KEY는 여기(서버)에만 존재
+  │  Google Gemini API 호출 (무료 티어)
   ▼
-Claude가 상품명/가격/용량/단위/구성개수/행사문구만 JSON으로 반환
+Gemini가 상품명/가격/용량/단위/구성개수/행사문구/배송비만 JSON으로 반환
   │
   ▼
 브라우저에서 단위 환산 · 행사가 계산 · 100ml/100g당 가격 계산 · 정렬
 ```
 
-- `ANTHROPIC_API_KEY`는 브라우저 코드, 번들, 응답 본문 어디에도 포함되지 않습니다.
+- `GEMINI_API_KEY`는 브라우저 코드, 번들, 응답 본문 어디에도 포함되지 않습니다.
   Vercel 프로젝트의 서버 환경변수로만 존재하고, `/api/analyze-price.js` 안에서만 사용됩니다.
+- Google AI Studio에서 발급받는 Gemini API 키는 **무료 티어**가 있어 신용카드 등록 없이 바로 쓸 수 있습니다
+  (Flash 계열 모델 한정, 분당/일일 요청 수 제한 있음).
 - 프론트엔드가 알아야 하는 값은 **없습니다.** (`VITE_...` 환경변수 자체가 필요 없음)
 - 이력(비교 결과)은 서버로 전송하지 않고 각 사용자 브라우저의 `localStorage`에만 저장됩니다.
 
@@ -47,8 +49,8 @@ git push -u origin main
 Vercel 프로젝트 → Settings → Environment Variables 에서 추가:
 | Name | Value |
 |---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-...` (Anthropic 콘솔에서 발급) |
-| `ANTHROPIC_MODEL` (선택) | `claude-sonnet-5` (기본값이라 생략 가능) |
+| `GEMINI_API_KEY` | Google AI Studio(https://aistudio.google.com/apikey)에서 발급 (무료, 카드 등록 불필요) |
+| `GEMINI_MODEL` (선택) | `gemini-2.5-flash` (기본값이라 생략 가능) |
 
 저장 후 "Redeploy" 한 번 눌러주면 끝입니다. 이후로는 `git push`만 하면 자동 배포됩니다.
 
@@ -60,7 +62,7 @@ npm install -g vercel
 npm install
 vercel dev
 ```
-`.env.local`에 `ANTHROPIC_API_KEY=sk-ant-...` 를 넣어두면 로컬에서도 인식됩니다 (git에는 커밋되지 않음).
+`.env.local`에 `GEMINI_API_KEY=...` 를 넣어두면 로컬에서도 인식됩니다 (git에는 커밋되지 않음).
 
 ## 다른 사용자의 휴대폰에서도 동작하는 이유
 
@@ -78,8 +80,10 @@ vercel dev
   이미지 장수를 줄이는 것을 고려하세요.
 - **남용 방지**: 현재는 요청당 이미지 4장, base64 크기 상한만 검사합니다. 트래픽이 늘어나면
   Vercel의 Rate Limiting(Firewall) 기능이나 Cloudflare Turnstile 같은 봇 방지 수단 추가를 권장합니다.
-- **비용**: Vision 호출 1회(사진 2~4장)당 Claude API 비용이 발생합니다. 트래픽이 많다면
-  `ANTHROPIC_MODEL`을 더 저렴한 모델로 바꾸는 것을 고려하세요.
+- **비용/한도**: Gemini 무료 티어는 분당·일일 요청 수 제한이 있습니다(모델마다 다름, 대략 분당 10회·일일 수백~1500회 수준).
+  한도를 넘으면 서버가 429를 반환하고 화면에 "잠시 후 다시 시도" 안내가 뜹니다. 트래픽이 늘어나면
+  Google AI Studio에서 결제를 켜거나(유료 전환), `GEMINI_MODEL`을 다른 Flash 계열 모델로 바꿔보세요.
+  최신 무료 티어 모델/한도는 https://ai.google.dev/gemini-api/docs/models 에서 확인하세요.
 
 ## 파일 구성
 

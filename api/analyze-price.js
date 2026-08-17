@@ -59,8 +59,10 @@ const EXTRACT_TOOL = {
               description:
                 '이 가격에 포함된 원래 판매 단위의 구성 개수(묶음). 예: "500ml 3개"면 3, 휴지 "30m 30롤"이면 30, ' +
                 '계란 한 판(30개)이면 30, 낱개/단일 포장이면 1. amount가 대표 용량으로 추정된 경우 ' +
-                '그 대표 용량 기준 개수로 최선 추정한다. "2+1" 같은 구매 행사 문구와 혼동하지 말 것 ' +
-                '(그건 promo 필드에 별도로 적는다).',
+                '그 대표 용량 기준 개수로 최선 추정한다. ' +
+                '중요: 상품명이나 옵션에 "1+1", "2+1", "3개 SET", "N개입"처럼 적혀 있고 표시된 가격이 ' +
+                '이미 그 전체 개수에 대한 총액이면(예: "1.7L 1+1" 16,900원 = 1.7L 두 병 합쳐 16,900원), ' +
+                '그 총 개수를 packQty에 넣고 promo는 반드시 null로 남긴다 (아래 promo 설명 참고, 이중 계산 금지).',
             },
             priceRegular: {
               type: 'number',
@@ -77,11 +79,22 @@ const EXTRACT_TOOL = {
             },
             promo: {
               type: ['string', 'null'],
-              description: '구매 시 추가로 더 주는 행사 문구(예: "1+1", "2+1"). 없으면 null.',
+              description:
+                '구매 시 이미 책정된 packQty·priceRegular에는 포함되지 않은, "추가로" 더 받는 무료 증정 문구 ' +
+                '(예: 가격표에 "3,000원 (2+1)"처럼 붙어 있어서 2개 값만 내면 1개를 더 주는 진짜 사은 행사). ' +
+                '중요: packQty에 이미 "1+1"류 구성을 반영했다면(위 packQty 설명 참고) 여기는 반드시 null. ' +
+                '같은 "1+1" 문구를 packQty와 promo 양쪽에 동시에 반영하지 말 것 (가격이 절반으로 잘못 계산됨).',
             },
             memberOnlyPromo: {
               type: 'boolean',
               description: 'promo가 "회원 전용", "앱 회원", "멤버십 전용" 등 회원에게만 적용되는 조건이 붙어 있으면 true.',
+            },
+            shippingFee: {
+              type: ['number', 'null'],
+              description:
+                '화면에 표시된 배송비(원). "3,000원 (30,000원 이상 무료배송)"처럼 조건부 무료배송 문턱값 아래일 때 ' +
+                '부과되는 기본 배송비 숫자가 보이면 그 값을 넣는다. "무료배송"이라고만 표시되어 있으면 0. ' +
+                '배송비 관련 정보가 화면에 아예 안 보이면 null(추측하지 말 것).',
             },
           },
           required: ['name', 'category', 'amount', 'amountUnit', 'packQty', 'priceRegular', 'memberOnlyPromo'],
@@ -132,9 +145,12 @@ export default async function handler(req, res) {
     '각 사진에서 상품명, 품목 카테고리(liquid/weight/count/length/sheet/unknown), ' +
     '낱개 기준 수치(amount)와 단위(amountUnit), 구성 개수(packQty), ' +
     '정상가(priceRegular)와 회원가(priceMember, 멤버십 전용 할인가가 별도 표시된 경우만), ' +
-    '행사 문구(promo)와 회원 전용 여부(memberOnlyPromo)를 읽어서 ' +
+    '행사 문구(promo)와 회원 전용 여부(memberOnlyPromo), 배송비(shippingFee, 표시된 경우만)를 읽어서 ' +
     'return_items 도구를 호출해 결과를 반환해줘. 사진이 주어진 순서대로 items 배열을 채워줘. ' +
     '카테고리 판단이 애매하면 unknown으로 표시해. ' +
+    '특히 주의: "1+1", "2+1", "N개입", "SET" 같은 문구가 상품명/옵션에 있고 표시된 가격이 이미 그 전체 수량의 ' +
+    '총액이면, packQty에만 그 개수를 반영하고 promo는 null로 둬라. 같은 정보를 packQty와 promo에 중복 반영하면 ' +
+    '가격이 실제보다 절반 등으로 잘못 계산되니 절대 하지 마라. ' +
     '값을 확신할 수 없으면 최선의 추정치를 채우되, 절대 도구 호출 없이 텍스트로만 답하지 마.';
 
   try {

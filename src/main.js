@@ -124,7 +124,7 @@ const VALID_CATEGORIES = ['liquid', 'weight', 'count', 'length', 'sheet', 'unkno
 function fallbackItems(count) {
   const arr = [];
   for (let i = 0; i < count; i++) {
-    arr.push({ name: '상품 ' + (i + 1), category: 'unknown', amount: 1, amountUnit: '', packQty: 1, priceRegular: 0, priceMember: null, promo: null, memberOnlyPromo: false });
+    arr.push({ name: '상품 ' + (i + 1), category: 'unknown', amount: 1, amountUnit: '', packQty: 1, priceRegular: 0, priceMember: null, promo: null, memberOnlyPromo: false, shippingFee: null });
   }
   return arr;
 }
@@ -160,6 +160,7 @@ btnCompare.addEventListener('click', async () => {
     priceMember: (p.priceMember !== null && p.priceMember !== undefined && Number(p.priceMember) > 0) ? Number(p.priceMember) : null,
     promoText: p.promo || null,
     memberOnlyPromo: !!p.memberOnlyPromo,
+    shippingFee: (p.shippingFee !== null && p.shippingFee !== undefined && Number(p.shippingFee) >= 0) ? Number(p.shippingFee) : null,
     useMemberPrice: false,
     // 촬영한 사진 순서와 items 순서가 같다는 전제로, 결과 카드에서 원본 사진을 보여주기 위해 연결해둔다.
     photoUrl: captured[i] ? captured[i].url : null
@@ -235,16 +236,20 @@ function normalize(item) {
   const unitScale = (item.category === 'liquid' || item.category === 'weight') ? 100 : 1;
 
   const usingMember = !!item.useMemberPrice && item.priceMember != null;
-  const basePrice = usingMember ? item.priceMember : item.priceRegular;
+  const priceBeforeShipping = usingMember ? item.priceMember : item.priceRegular;
+  const shippingFee = item.shippingFee != null ? item.shippingFee : 0;
+  const basePrice = priceBeforeShipping + shippingFee;
   const priceBasisLabel = usingMember ? '회원가' : '일반가';
 
-  const promoActive = !!item.promoText && (!item.memberOnlyPromo || usingMember);
+  // "1+1" 같은 문구가 이미 packQty(묶음 수량)에 반영되어 있는데 promo에도 같은 수치로 중복 추출된 경우,
+  // 가격을 두 번 할인하지 않도록 promo 반영을 건너뛴다. (예: "1.7L 1+1" 총액을 packQty=2로 이미 반영했는데
+  // promo="1+1"까지 곱하면 절반으로 잘못 계산됨)
+  const promoMatch = item.promoText ? String(item.promoText).match(/(\d+)\s*\+\s*(\d+)/) : null;
   let promoBuy = 1, promoFree = 0;
-  if (promoActive) {
-    const m = String(item.promoText).match(/(\d+)\s*\+\s*(\d+)/);
-    if (m) { promoBuy = parseInt(m[1], 10); promoFree = parseInt(m[2], 10); }
-  }
-  const factor = promoBuy / (promoBuy + promoFree);
+  if (promoMatch) { promoBuy = parseInt(promoMatch[1], 10); promoFree = parseInt(promoMatch[2], 10); }
+  const promoAlreadyInPack = !!promoMatch && packQty > 1 && packQty === (promoBuy + promoFree);
+  const promoActive = !!item.promoText && (!item.memberOnlyPromo || usingMember) && !promoAlreadyInPack;
+  const factor = promoActive ? (promoBuy / (promoBuy + promoFree)) : 1;
 
   const baseUnit = (basePrice / totalAmount) * unitScale;
   const afterUnit = baseUnit * factor;
@@ -254,8 +259,8 @@ function normalize(item) {
 
   return {
     ...item, canonical, packQty, totalAmount, unitScale,
-    basePrice, priceBasisLabel, usingMember,
-    promoActive, promoBuy, promoFree, factor,
+    priceBeforeShipping, shippingFee, basePrice, priceBasisLabel, usingMember,
+    promoActive, promoAlreadyInPack, promoBuy, promoFree, factor,
     baseUnit, afterUnit, perRoll
   };
 }
@@ -263,7 +268,10 @@ function normalize(item) {
 function calcText(it) {
   const base = Math.round(it.baseUnit).toLocaleString();
   const lines = [];
-  lines.push('[' + it.priceBasisLabel + ' 적용] ' + it.basePrice.toLocaleString() + '원');
+  lines.push('[' + it.priceBasisLabel + ' 적용] ' + it.priceBeforeShipping.toLocaleString() + '원');
+  if (it.shippingFee > 0) {
+    lines.push('+ 배송비 ' + it.shippingFee.toLocaleString() + '원 = ' + it.basePrice.toLocaleString() + '원');
+  }
   if (it.category !== 'count' && it.packQty > 1) {
     lines.push(it.canonical.value.toLocaleString() + it.canonical.unit + ' × ' + it.packQty + '개 = ' + it.totalAmount.toLocaleString() + it.canonical.unit);
   }
@@ -274,6 +282,8 @@ function calcText(it) {
   }
   if (it.promoActive && it.promoBuy > 0 && it.promoFree > 0) {
     lines.push('× ' + it.promoBuy + '/' + (it.promoBuy + it.promoFree) + ' 행사가 반영 = ' + Math.round(it.afterUnit).toLocaleString() + '원');
+  } else if (it.promoAlreadyInPack) {
+    lines.push('("' + it.promoText + '"는 이미 위 ' + it.packQty + '개 구성/가격에 포함되어 있어 중복 할인하지 않음)');
   } else if (it.promoText && it.memberOnlyPromo && !it.usingMember) {
     lines.push('(회원 전용 행사 "' + it.promoText + '" · 지금은 일반가라 미반영, 회원가로 전환하면 반영됨)');
   }
@@ -331,7 +341,10 @@ function renderResults() {
     const card = document.createElement('div');
     card.className = 'result-card' + (idx === 0 ? ' winner' : '');
     const hasPromo = it.promoActive && it.promoBuy > 0 && it.promoFree > 0;
-    const promoLabel = it.promoText ? (it.promoText + (it.memberOnlyPromo ? ' (회원 전용)' : '')) : '행사 없음';
+    const promoLabel = it.promoAlreadyInPack
+      ? (it.promoText + ' (이미 반영됨)')
+      : (it.promoText ? (it.promoText + (it.memberOnlyPromo ? ' (회원 전용)' : '')) : '행사 없음');
+    const shippingLabel = it.shippingFee > 0 ? (' · 배송비 ' + it.shippingFee.toLocaleString() + '원 포함') : '';
 
     let saveLine = '';
     if (idx === 0 && runnerUp) {
@@ -360,7 +373,7 @@ function renderResults() {
         <div class="rc-top-text">
           <div class="rc-rank">${idx + 1}위 · ${it.priceBasisLabel}</div>
           <div class="rc-name">${escapeHtml(it.name)}</div>
-          <div class="rc-vol">${volText} · ${escapeHtml(promoLabel)}</div>
+          <div class="rc-vol">${volText} · ${escapeHtml(promoLabel)}${shippingLabel}</div>
         </div>
         <div class="rc-price">
           ${hasPromo ? '<span class="rc-before">' + Math.round(it.baseUnit).toLocaleString() + '원</span>' : ''}
@@ -430,6 +443,10 @@ function renderResults() {
             <option value="true" ${it.memberOnlyPromo ? 'selected' : ''}>예</option>
           </select>
         </div>
+        <div class="edit-field">
+          <label>배송비(원, 없으면 비움)</label>
+          <input type="number" data-field="shippingFee" data-id="${it.id}" value="${it.shippingFee > 0 ? it.shippingFee : ''}">
+        </div>
       </div>
     `;
     list.appendChild(card);
@@ -464,6 +481,9 @@ function renderResults() {
       } else if (field === 'priceMember') {
         const val = parseFloat(inp.value);
         item.priceMember = (inp.value.trim() === '' || isNaN(val) || val <= 0) ? null : val;
+      } else if (field === 'shippingFee') {
+        const val = parseFloat(inp.value);
+        item.shippingFee = (inp.value.trim() === '' || isNaN(val) || val < 0) ? null : val;
       } else if (field === 'promoText') {
         item.promoText = inp.value.trim() || null;
       } else if (field === 'memberOnlyPromo') {
